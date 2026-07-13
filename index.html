@@ -1772,12 +1772,22 @@ function renderSessionsList() {
     const idx = state.sessions.length - 1 - ri;
     const d = new Date(s.date + 'T12:00:00');
     const dateStr = d.toLocaleDateString('es', {weekday:'long', day:'numeric', month:'long'});
-    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+    const present = (s.present||[]).length;
+    const just = (s.justified||[]).length;
+    const absent = state.players.length - present - just;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px">
       <div>
         <div style="font-weight:500;font-size:13px">${s.day} — ${dateStr}</div>
-        <div style="font-size:12px;color:var(--gray)">${s.present.length} de ${state.players.length} jugadoras presentes</div>
+        <div style="font-size:12px;margin-top:2px;display:flex;gap:8px">
+          <span style="color:var(--green)">✅ ${present}</span>
+          ${just > 0 ? `<span style="color:#D97706">📋 ${just}</span>` : ''}
+          <span style="color:#C0392B">❌ ${absent}</span>
+        </div>
       </div>
-      <button class="btn btn-danger btn-sm" onclick="deleteSession(${idx})">Eliminar</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" onclick="openSessionModal('${s.date}')">✏️ Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteSession(${idx})">Eliminar</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -2110,8 +2120,9 @@ function getEventsForDate(dateStr) {
   // Check if there's a recorded attendance session for this date
   const session = state.sessions.find(s => s.date === dateStr);
   if ([1,2,3,4].includes(dow) && !cancelled) {
-    const present = session ? session.present.length : null;
-    const label = session ? `Entrenamiento (${present}/${state.players.length})` : 'Entrenamiento';
+    const present = session ? (session.present||[]).length : null;
+    const just = session ? (session.justified||[]).length : 0;
+    const label = session ? `Entrenamiento ✅${present}${just>0?' 📋'+just:''}/${state.players.length}` : 'Entrenamiento';
     evs.unshift({ id:'train_'+dateStr, title: label, type: session ? 'train_done' : 'train', date:dateStr, _auto:true, _session:true });
   }
   // Birthdays from players
@@ -2711,7 +2722,7 @@ function openSessionModal(dateStr) {
     const present = session.present || [];
     const body = state.players.map(p => {
       const wasPresent = (present||[]).map(Number).includes(Number(p.id));
-      const wasJust = (s.justified||[]).map(Number).includes(Number(p.id));
+      const wasJust = ((session.justified||[])).map(Number).includes(Number(p.id));
       const attState = wasPresent ? 'present' : wasJust ? 'just' : 'absent';
       if (isAdmin) {
         return `<div class="att-player-row">
