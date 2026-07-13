@@ -1654,26 +1654,60 @@ function renderAttList() {
     <div class="att-player-row">
       <div class="att-avatar">${p.photo ? `<img src="${p.photo}" alt="${p.name}">` : initials(p.name)}</div>
       <div style="flex:1"><div class="att-name">${p.name}</div><div class="att-pos">${p.pos}</div></div>
-      <div class="att-toggle" id="att_${p.id}" onclick="toggleAtt(${p.id})"></div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button id="att_${p.id}_present" onclick="setAttState(${p.id},'present')" 
+          style="padding:5px 10px;border-radius:20px;border:1.5px solid var(--border);background:white;font-size:12px;cursor:pointer;font-family:Inter,sans-serif;transition:all .15s">✅</button>
+        <button id="att_${p.id}_just" onclick="setAttState(${p.id},'just')"
+          style="padding:5px 10px;border-radius:20px;border:1.5px solid var(--border);background:white;font-size:12px;cursor:pointer;font-family:Inter,sans-serif;transition:all .15s">📋</button>
+        <button id="att_${p.id}_absent" onclick="setAttState(${p.id},'absent')"
+          style="padding:5px 10px;border-radius:20px;border:1.5px solid var(--border);background:white;font-size:12px;cursor:pointer;font-family:Inter,sans-serif;transition:all .15s">❌</button>
+      </div>
     </div>`).join('');
   updateAttCountPreview();
 }
 
-function toggleAtt(id) {
-  const el = document.getElementById('att_' + id);
-  el.classList.toggle('on');
+function setAttState(id, state) {
+  ['present','just','absent'].forEach(s => {
+    const btn = document.getElementById(`att_${id}_${s}`);
+    if (!btn) return;
+    const colors = { present:'#0A7C4E', just:'#D97706', absent:'#C0392B' };
+    if (s === state) {
+      btn.style.background = colors[s];
+      btn.style.color = 'white';
+      btn.style.borderColor = colors[s];
+      btn.dataset.selected = 'true';
+    } else {
+      btn.style.background = 'white';
+      btn.style.color = 'var(--dark)';
+      btn.style.borderColor = 'var(--border)';
+      btn.dataset.selected = '';
+    }
+  });
   updateAttCountPreview();
 }
 
+function getAttState(id) {
+  if (document.getElementById(`att_${id}_present`)?.dataset.selected === 'true') return 'present';
+  if (document.getElementById(`att_${id}_just`)?.dataset.selected === 'true') return 'just';
+  if (document.getElementById(`att_${id}_absent`)?.dataset.selected === 'true') return 'absent';
+  return 'absent'; // default
+}
+
 function updateAttCountPreview() {
-  const on = document.querySelectorAll('.att-toggle.on').length;
-  document.getElementById('att-count-preview').textContent = on + ' marcada' + (on !== 1 ? 's' : '');
+  const present = state.players.filter(p => document.getElementById(`att_${p.id}_present`)?.dataset.selected === 'true').length;
+  const just = state.players.filter(p => document.getElementById(`att_${p.id}_just`)?.dataset.selected === 'true').length;
+  document.getElementById('att-count-preview').textContent = `✅ ${present} presentes · 📋 ${just} justificadas`;
 }
 
 function toggleAllAtt(val) {
   state.players.forEach(p => {
-    const el = document.getElementById('att_' + p.id);
-    if (el) { if (val) el.classList.add('on'); else el.classList.remove('on'); }
+    if (val) setAttState(p.id, 'present');
+    else {
+      ['present','just','absent'].forEach(s => {
+        const btn = document.getElementById(`att_${p.id}_${s}`);
+        if (btn) { btn.style.background='white'; btn.style.color='var(--dark)'; btn.style.borderColor='var(--border)'; btn.dataset.selected=''; }
+      });
+    }
   });
   updateAttCountPreview();
 }
@@ -1682,13 +1716,14 @@ function saveAttendance() {
   const date = document.getElementById('att-date').value;
   if (!date) { alert('Selecciona una fecha.'); return; }
   if (!state.players.length) { alert('No hay jugadoras en el plantel.'); return; }
-  const present = state.players.filter(p => document.getElementById('att_' + p.id)?.classList.contains('on')).map(p => p.id);
+  const present = state.players.filter(p => getAttState(p.id) === 'present').map(p => Number(p.id));
+  const justified = state.players.filter(p => getAttState(p.id) === 'just').map(p => Number(p.id));
   checkAdmin(async () => {
-    const sessionData = { date, day: selDay, present };
+    const sessionData = { date, day: selDay, present, justified: justified || [] };
     const row = await sbInsert('sessions', { data: sessionData });
     if (row) sessionData._rowId = row.id;
     state.sessions.push(sessionData);
-    toggleAllAtt(false);
+    toggleAllAtt(false); // reset all
     updateAttMetrics();
     renderAttSummary();
     document.getElementById('a-sessions').textContent = state.sessions.length;
@@ -1756,13 +1791,19 @@ function renderAttSummary() {
   const rows = state.players.map(p => {
     const pct = getAttPct(p.id);
     const att = state.sessions.filter(s => (s.present||[]).map(Number).includes(Number(p.id))).length;
+    const just = state.sessions.filter(s => (s.justified||[]).map(Number).includes(Number(p.id))).length;
+    const absent = state.sessions.length - att - just;
     const color = attColor(pct);
-    return `<div class="att-bar-row">
+    return `<div class="att-bar-row" style="flex-wrap:wrap;gap:6px">
       <div class="att-avatar" style="width:28px;height:28px;font-size:10px;flex-shrink:0">${p.photo ? `<img src="${p.photo}" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover">` : initials(p.name)}</div>
-      <div class="att-bar-name" title="${p.name}">${p.name.split(' ')[0]}</div>
+      <div class="att-bar-name" title="${p.name}">${p.name.split(' ')[0]} ${p.name.split(' ')[1]||''}</div>
       <div class="att-bar-track"><div class="att-bar-fill" style="width:${pct}%;background:${color}"></div></div>
       <div class="att-bar-pct" style="color:${color}">${pct}%</div>
-      <div style="font-size:11px;color:var(--gray);width:50px;text-align:right">${att}/${state.sessions.length}</div>
+      <div style="font-size:11px;display:flex;gap:6px">
+        <span style="color:var(--green)" title="Presentes">✅ ${att}</span>
+        ${just > 0 ? `<span style="color:#D97706" title="Justificadas">📋 ${just}</span>` : ''}
+        ${absent > 0 ? `<span style="color:#C0392B" title="Ausentes">❌ ${absent}</span>` : ''}
+      </div>
     </div>`;
   }).join('');
   body.innerHTML = rows;
@@ -2670,15 +2711,21 @@ function openSessionModal(dateStr) {
     const present = session.present || [];
     const body = state.players.map(p => {
       const wasPresent = (present||[]).map(Number).includes(Number(p.id));
+      const wasJust = (s.justified||[]).map(Number).includes(Number(p.id));
+      const attState = wasPresent ? 'present' : wasJust ? 'just' : 'absent';
       if (isAdmin) {
         return `<div class="att-player-row">
           <div class="att-avatar">${p.photo ? `<img src="${p.photo}" style="width:36px;height:36px;border-radius:50%;object-fit:cover">` : initials(p.name)}</div>
           <div style="flex:1"><div class="att-name">${p.name}</div><div class="att-pos">${p.pos||''}</div></div>
-          <div class="att-toggle ${wasPresent?'on':''}" id="sedit_${p.id}" onclick="toggleSessionEdit(${p.id})"></div>
+          <div style="display:flex;gap:4px">
+            <button id="sedit_${p.id}_present" onclick="setSessionEditState(${p.id},'present')" style="padding:4px 8px;border-radius:20px;border:1.5px solid ${attState==='present'?'var(--green)':'var(--border)'};background:${attState==='present'?'var(--green)':'white'};color:${attState==='present'?'white':'var(--dark)'};font-size:11px;cursor:pointer" data-selected="${attState==='present'}">✅</button>
+            <button id="sedit_${p.id}_just" onclick="setSessionEditState(${p.id},'just')" style="padding:4px 8px;border-radius:20px;border:1.5px solid ${attState==='just'?'#D97706':'var(--border)'};background:${attState==='just'?'#D97706':'white'};color:${attState==='just'?'white':'var(--dark)'};font-size:11px;cursor:pointer" data-selected="${attState==='just'}">📋</button>
+            <button id="sedit_${p.id}_absent" onclick="setSessionEditState(${p.id},'absent')" style="padding:4px 8px;border-radius:20px;border:1.5px solid ${attState==='absent'?'#C0392B':'var(--border)'};background:${attState==='absent'?'#C0392B':'white'};color:${attState==='absent'?'white':'var(--dark)'};font-size:11px;cursor:pointer" data-selected="${attState==='absent'}">❌</button>
+          </div>
         </div>`;
       } else {
-        const color = wasPresent ? 'var(--green)' : 'var(--gray)';
-        const icon = wasPresent ? '✅' : '—';
+        const icon = wasPresent ? '✅' : wasJust ? '📋' : '❌';
+        const color = wasPresent ? 'var(--green)' : wasJust ? '#D97706' : 'var(--gray)';
         return `<div class="att-player-row">
           <div class="att-avatar">${p.photo ? `<img src="${p.photo}" style="width:36px;height:36px;border-radius:50%;object-fit:cover">` : initials(p.name)}</div>
           <div style="flex:1"><div class="att-name">${p.name}</div><div class="att-pos">${p.pos||''}</div></div>
@@ -2700,27 +2747,41 @@ function openSessionModal(dateStr) {
   document.getElementById('sessionModalOverlay').classList.add('open');
 }
 
-function toggleSessionEdit(playerId) {
-  const el = document.getElementById('sedit_' + playerId);
-  if (el) { el.classList.toggle('on'); updateSessionEditCount(); }
+function setSessionEditState(playerId, state) {
+  ['present','just','absent'].forEach(s => {
+    const btn = document.getElementById(`sedit_${playerId}_${s}`);
+    if (!btn) return;
+    const colors = { present:'var(--green)', just:'#D97706', absent:'#C0392B' };
+    if (s === state) { btn.style.background=colors[s]; btn.style.color='white'; btn.style.borderColor=colors[s]; btn.dataset.selected='true'; }
+    else { btn.style.background='white'; btn.style.color='var(--dark)'; btn.style.borderColor='var(--border)'; btn.dataset.selected=''; }
+  });
+  updateSessionEditCount();
+}
+
+function getSessionEditState(playerId) {
+  if (document.getElementById(`sedit_${playerId}_present`)?.dataset.selected === 'true') return 'present';
+  if (document.getElementById(`sedit_${playerId}_just`)?.dataset.selected === 'true') return 'just';
+  return 'absent';
 }
 
 function updateSessionEditCount() {
-  const on = document.querySelectorAll('#session-modal-body .att-toggle.on').length;
-  document.getElementById('session-edit-count').textContent = on + ' marcadas';
+  const present = state.players.filter(p => document.getElementById(`sedit_${p.id}_present`)?.dataset.selected === 'true').length;
+  const just = state.players.filter(p => document.getElementById(`sedit_${p.id}_just`)?.dataset.selected === 'true').length;
+  document.getElementById('session-edit-count').textContent = `✅ ${present} presentes · 📋 ${just} justificadas`;
 }
 
 async function saveSessionEdit() {
   const dateStr = editingSessionDate;
   if (!dateStr) return;
-  const present = state.players.filter(p => document.getElementById('sedit_' + p.id)?.classList.contains('on')).map(p => Number(p.id));
+  const present = state.players.filter(p => getSessionEditState(p.id) === 'present').map(p => Number(p.id));
+  const justified = state.players.filter(p => getSessionEditState(p.id) === 'just').map(p => Number(p.id));
   const sessionIdx = state.sessions.findIndex(s => s.date === dateStr);
   
   // Update in Supabase
   const rows = await sbGet('sessions');
   const row = rows.find(r => r.data && r.data.date === dateStr);
   
-  const updatedSession = { ...state.sessions[sessionIdx], present };
+  const updatedSession = { ...state.sessions[sessionIdx], present, justified };
   if (row) await sbUpdate('sessions', row.id, { data: updatedSession });
   
   state.sessions[sessionIdx] = updatedSession;
