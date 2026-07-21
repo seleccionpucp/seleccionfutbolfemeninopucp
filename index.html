@@ -2936,12 +2936,16 @@ function openCropModal(src, target) {
   img.onload = () => {
     cropNaturalW = img.naturalWidth;
     cropNaturalH = img.naturalHeight;
-    // Fit image to fill crop area initially
-    const fitScale = Math.max(CROP_SIZE / cropNaturalW, CROP_SIZE / cropNaturalH);
+    // Start with image fitting fully visible (no forced fill)
+    const fitScale = Math.min(CROP_SIZE / cropNaturalW, CROP_SIZE / cropNaturalH);
     cropScale = fitScale;
     cropOffsetX = (CROP_SIZE - cropNaturalW * cropScale) / 2;
     cropOffsetY = (CROP_SIZE - cropNaturalH * cropScale) / 2;
-    document.getElementById('crop-zoom-slider').value = cropScale;
+    // Slider: 1 = current fit scale, range from fit to 3x fit
+    document.getElementById('crop-zoom-slider').min = fitScale;
+    document.getElementById('crop-zoom-slider').max = fitScale * 3;
+    document.getElementById('crop-zoom-slider').step = fitScale * 0.02;
+    document.getElementById('crop-zoom-slider').value = fitScale;
     applyCropTransform();
   };
   img.src = src;
@@ -2958,7 +2962,9 @@ function applyCropTransform() {
 }
 
 function cropZoom(delta) {
-  const newScale = Math.max(0.5, Math.min(2, cropScale + delta));
+  const minScale = parseFloat(document.getElementById('crop-zoom-slider').min) || 0.1;
+  const maxScale = parseFloat(document.getElementById('crop-zoom-slider').max) || 2;
+  const newScale = Math.max(minScale, Math.min(maxScale, cropScale + (delta * cropScale * 0.3)));
   const centerX = CROP_SIZE / 2;
   const centerY = CROP_SIZE / 2;
   cropOffsetX = centerX - (centerX - cropOffsetX) * (newScale / cropScale);
@@ -3000,7 +3006,7 @@ function setupCropDrag() {
     e.preventDefault();
   };
   wrap.ontouchend = () => { cropDragStart = null; };
-  wrap.onwheel = e => { cropZoom(e.deltaY < 0 ? 0.05 : -0.05); e.preventDefault(); };
+  wrap.onwheel = e => { cropZoom(e.deltaY < 0 ? 0.1 : -0.1); e.preventDefault(); };
 }
 
 function confirmCrop() {
@@ -3057,9 +3063,9 @@ function refreshAll() {
       <div class="crop-circle-guide"></div>
     </div>
     <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:16px">
-      <button onclick="cropZoom(-0.05)" class="btn btn-sm" style="font-size:18px;width:36px;height:36px;padding:0">−</button>
+      <button onclick="cropZoom(-0.1)" class="btn btn-sm" style="font-size:18px;width:36px;height:36px;padding:0">−</button>
       <input type="range" id="crop-zoom-slider" min="0.5" max="3" step="0.05" value="1" style="width:160px;accent-color:var(--green)" oninput="setCropZoom(parseFloat(this.value))">
-      <button onclick="cropZoom(0.05)" class="btn btn-sm" style="font-size:18px;width:36px;height:36px;padding:0">+</button>
+      <button onclick="cropZoom(0.1)" class="btn btn-sm" style="font-size:18px;width:36px;height:36px;padding:0">+</button>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn" onclick="closeCropModal()">Cancelar</button>
