@@ -941,7 +941,8 @@ tr:hover td { background: var(--gray-light); }
               <div class="form-group"><label class="form-label">30 metros con salida lanzada (seg)</label><input class="form-input" id="fis-30sl" type="number" step="0.01" placeholder="Ej: 3.60"></div>
             </div>
             <div class="form-grid" style="margin-bottom:12px">
-              <div class="form-group"><label class="form-label">Salto (cm)</label><input class="form-input" id="fis-jump" type="number" placeholder="Ej: 45"></div>
+              <div class="form-group"><label class="form-label">Salto vertical (cm)</label><input class="form-input" id="fis-jump" type="number" placeholder="Ej: 45"></div>
+              <div class="form-group"><label class="form-label">Salto horizontal (cm)</label><input class="form-input" id="fis-jumph" type="number" placeholder="Ej: 180"></div>
               <div class="form-group"><label class="form-label">1200 metros (min:seg)</label><input class="form-input" id="fis-1200" type="text" placeholder="Ej: 5:30"></div>
             </div>
             <div class="form-group" style="margin-bottom:14px"><label class="form-label">Observaciones del profe</label><input class="form-input" id="fis-obs" placeholder="Ej: Buena resistencia, mejorar velocidad de arranque..."></div>
@@ -954,7 +955,7 @@ tr:hover td { background: var(--gray-light); }
           <div class="card-body">
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Jugadora</th><th>Fecha</th><th>Peso</th><th>Talla</th><th>IMC</th><th>30m lanzados</th><th>30m s. lanzada</th><th>Salto</th><th>1200m</th><th>Observaciones</th></tr></thead>
+                <thead><tr><th>Jugadora</th><th>Fecha</th><th>Peso</th><th>Talla</th><th>IMC</th><th>30m lanzados</th><th>30m s. lanzada</th><th>Salto vert.</th><th>Salto horiz.</th><th>1200m</th><th>Observaciones</th></tr></thead>
                 <tbody id="fis-tbody"></tbody>
               </table>
               <div class="empty-state" id="fis-empty"><div class="empty-icon">⚡</div><div class="empty-text">Sin evaluaciones físicas aún</div></div>
@@ -1885,6 +1886,7 @@ function saveFisico() {
       speed30l: document.getElementById('fis-30l').value,
       speed30sl: document.getElementById('fis-30sl').value,
       jump: document.getElementById('fis-jump').value,
+      jumph: document.getElementById('fis-jumph').value,
       run1200: document.getElementById('fis-1200').value,
       obs: document.getElementById('fis-obs').value
     };
@@ -1917,6 +1919,7 @@ function renderFisTable() {
       <td>${r.speed30l ? r.speed30l + ' s' : '—'}</td>
       <td>${r.speed30sl ? r.speed30sl + ' s' : '—'}</td>
       <td>${r.jump ? r.jump + ' cm' : '—'}</td>
+      <td>${r.jumph ? r.jumph + ' cm' : '—'}</td>
       <td>${r.run1200 || '—'}</td>
       <td style="font-size:12px">${r.obs || '—'}</td>
     </tr>`;
@@ -2041,7 +2044,8 @@ function openModal(id) {
       ['IMC', f.imc || '—'],
       ['30m lanzados', f.speed30l ? f.speed30l + ' s' : '—'],
       ['30m s. lanzada', f.speed30sl ? f.speed30sl + ' s' : '—'],
-      ['Salto', f.jump ? f.jump + ' cm' : '—'],
+      ['Salto vertical', f.jump ? f.jump + ' cm' : '—'],
+      ['Salto horizontal', f.jumph ? f.jumph + ' cm' : '—'],
       ['1200m', f.run1200 || '—']
     ].map(([l, v]) => `<div class="modal-field"><div class="modal-field-label">${l}</div><div class="modal-field-val">${v}</div></div>`).join('');
   } else {
