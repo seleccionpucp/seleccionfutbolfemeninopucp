@@ -1339,6 +1339,16 @@ tr:hover td { background: var(--gray-light); }
         <div class="form-group"><label class="form-label">Fecha de nacimiento</label><input class="form-input" type="date" id="edit-birthday"></div>
         <div class="form-group"><label class="form-label">Contacto de emergencia</label><input class="form-input" id="edit-emerg"></div>
       </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label class="form-label">Días asignados de entrenamiento</label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px"><input type="checkbox" id="edit-day-lunes" value="Lunes"> Lunes</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px"><input type="checkbox" id="edit-day-martes" value="Martes"> Martes</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px"><input type="checkbox" id="edit-day-miercoles" value="Miércoles"> Miércoles</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px"><input type="checkbox" id="edit-day-jueves" value="Jueves"> Jueves</label>
+        </div>
+        <div style="font-size:11px;color:var(--gray);margin-top:4px">La asistencia solo baja si falta en uno de sus días asignados.</div>
+      </div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
         <button class="btn" onclick="closeEditModal()">Cancelar</button>
         <button class="btn btn-primary" onclick="saveEditPlayer()">Guardar cambios</button>
@@ -1665,6 +1675,7 @@ function setDay(el, day) {
   document.querySelectorAll('.day-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   selDay = day;
+  renderAttList();
 }
 
 function renderAttList() {
@@ -1673,19 +1684,28 @@ function renderAttList() {
     c.innerHTML = '<div class="empty-state" style="padding:20px"><div class="empty-icon">👥</div><div class="empty-text">Agrega jugadoras al plantel primero</div></div>';
     return;
   }
-  c.innerHTML = state.players.map(p => `
+  c.innerHTML = state.players.map(p => {
+    const assigned = p.assignedDays && p.assignedDays.length ? p.assignedDays : null;
+    const isExpected = !assigned || assigned.includes(selDay);
+    const dayBadge = assigned
+      ? (isExpected
+          ? `<span style="font-size:10px;background:#E8F5EF;color:#0A7C4E;border-radius:20px;padding:2px 7px;font-weight:600">●&nbsp;hoy</span>`
+          : `<span style="font-size:10px;background:#fdecea;color:#C0392B;border-radius:20px;padding:2px 7px;font-weight:600">no hoy</span>`)
+      : '';
+    return `
     <div class="att-player-row">
       <div class="att-avatar">${p.photo ? `<img src="${p.photo}" alt="${p.name}">` : initials(p.name)}</div>
-      <div style="flex:1"><div class="att-name">${p.name}</div><div class="att-pos">${p.pos}</div></div>
+      <div style="flex:1"><div class="att-name">${p.name} ${dayBadge}</div><div class="att-pos">${p.pos}</div></div>
       <div style="display:flex;gap:6px;align-items:center">
-        <button id="att_${p.id}_present" onclick="setAttState(${p.id},'present')" 
+        <button id="att_${p.id}_present" onclick="setAttState(${p.id},'present')"
           style="padding:5px 10px;border-radius:20px;border:1.5px solid var(--border);background:white;font-size:12px;cursor:pointer;font-family:Inter,sans-serif;transition:all .15s">✅</button>
         <button id="att_${p.id}_just" onclick="setAttState(${p.id},'just')"
           style="padding:5px 10px;border-radius:20px;border:1.5px solid var(--border);background:white;font-size:12px;cursor:pointer;font-family:Inter,sans-serif;transition:all .15s">📋</button>
         <button id="att_${p.id}_absent" onclick="setAttState(${p.id},'absent')"
           style="padding:5px 10px;border-radius:20px;border:1.5px solid var(--border);background:white;font-size:12px;cursor:pointer;font-family:Inter,sans-serif;transition:all .15s">❌</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   updateAttCountPreview();
 }
 
@@ -2089,8 +2109,21 @@ function shortPos(pos) {
   return map[pos] || pos.slice(0, 3).toUpperCase();
 }
 function getAttPct(id) {
-  if (!state.sessions.length) return 0;
-  return Math.round(state.sessions.filter(s => (s.present||[]).map(Number).includes(Number(id))).length / state.sessions.length * 100);
+  const player = state.players.find(p => Number(p.id) === Number(id));
+  const assigned = (player && player.assignedDays && player.assignedDays.length) ? player.assignedDays : null;
+  if (!assigned) {
+    // fallback: count all sessions
+    if (!state.sessions.length) return 100;
+    const presentCount = state.sessions.filter(s => (s.present||[]).map(Number).includes(Number(id))).length;
+    const justCount = state.sessions.filter(s => (s.justified||[]).map(Number).includes(Number(id))).length;
+    const total = state.sessions.length;
+    return Math.round((presentCount + justCount) / total * 100);
+  }
+  // Only count sessions on assigned days as mandatory
+  const mandatory = state.sessions.filter(s => assigned.includes(s.day));
+  if (!mandatory.length) return 100;
+  const attended = mandatory.filter(s => (s.present||[]).map(Number).includes(Number(id)) || (s.justified||[]).map(Number).includes(Number(id)));
+  return Math.round(attended.length / mandatory.length * 100);
 }
 function attColor(pct) { return pct >= 80 ? '#0A7C4E' : pct >= 60 ? '#D97706' : '#C0392B'; }
 function avatarEl(p, size = 32) {
@@ -2859,6 +2892,12 @@ function openEditModal(id) {
     document.getElementById('edit-pos').value = p.pos || 'Portera';
     document.getElementById('edit-birthday').value = p.birthday || '';
     document.getElementById('edit-emerg').value = p.emerg || '';
+    // Assigned days
+    const assigned = p.assignedDays || [];
+    document.getElementById('edit-day-lunes').checked = assigned.includes('Lunes');
+    document.getElementById('edit-day-martes').checked = assigned.includes('Martes');
+    document.getElementById('edit-day-miercoles').checked = assigned.includes('Miércoles');
+    document.getElementById('edit-day-jueves').checked = assigned.includes('Jueves');
     // Photo
     if (p.photo) {
       document.getElementById('edit-photo-preview').src = p.photo;
@@ -2893,6 +2932,10 @@ async function saveEditPlayer() {
     ? document.getElementById('edit-photo-preview').src
     : (state.players[idx].photo || '');
 
+  const assignedDays = ['Lunes','Martes','Miércoles','Jueves'].filter(d => {
+    const id2 = {Lunes:'lunes',Martes:'martes','Miércoles':'miercoles',Jueves:'jueves'}[d];
+    return document.getElementById(`edit-day-${id2}`)?.checked;
+  });
   const updated = {
     ...state.players[idx],
     name,
@@ -2903,7 +2946,8 @@ async function saveEditPlayer() {
     pos: document.getElementById('edit-pos').value,
     birthday: document.getElementById('edit-birthday').value,
     emerg: document.getElementById('edit-emerg').value.trim(),
-    photo
+    photo,
+    assignedDays
   };
 
   // Update in Supabase
