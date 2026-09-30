@@ -2112,18 +2112,25 @@ function getAttPct(id) {
   const player = state.players.find(p => Number(p.id) === Number(id));
   const assigned = (player && player.assignedDays && player.assignedDays.length) ? player.assignedDays : null;
   if (!assigned) {
-    // fallback: count all sessions
     if (!state.sessions.length) return 100;
     const presentCount = state.sessions.filter(s => (s.present||[]).map(Number).includes(Number(id))).length;
     const justCount = state.sessions.filter(s => (s.justified||[]).map(Number).includes(Number(id))).length;
-    const total = state.sessions.length;
-    return Math.round((presentCount + justCount) / total * 100);
+    return Math.round((presentCount + justCount) / state.sessions.length * 100);
   }
-  // Only count sessions on assigned days as mandatory
+  // Mandatory sessions = those on assigned days
   const mandatory = state.sessions.filter(s => assigned.includes(s.day));
   if (!mandatory.length) return 100;
-  const attended = mandatory.filter(s => (s.present||[]).map(Number).includes(Number(id)) || (s.justified||[]).map(Number).includes(Number(id)));
-  return Math.round(attended.length / mandatory.length * 100);
+  // attended = was present OR justified on a mandatory day
+  const attended = mandatory.filter(s =>
+    (s.present||[]).map(Number).includes(Number(id)) ||
+    (s.justified||[]).map(Number).includes(Number(id))
+  ).length;
+  // bonus = came on a non-mandatory day (counts positively, never negatively)
+  const nonMandatory = state.sessions.filter(s => !assigned.includes(s.day));
+  const bonus = nonMandatory.filter(s => (s.present||[]).map(Number).includes(Number(id))).length;
+  // total mandatory + bonus days attended / total mandatory sessions
+  const total = mandatory.length;
+  return Math.min(100, Math.round((attended + bonus) / total * 100));
 }
 function attColor(pct) { return pct >= 80 ? '#0A7C4E' : pct >= 60 ? '#D97706' : '#C0392B'; }
 function avatarEl(p, size = 32) {
